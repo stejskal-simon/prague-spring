@@ -1,0 +1,879 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Prague Spring 1968 — Interactive Timeline</title>
+<meta name="author" content="Šimon Mičulka, Šimon Stejskal">
+<style>
+  /* Only thing in light DOM: kill any host page margin/padding */
+  html, body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: transparent !important;
+  }
+  prague-timeline {
+    display: block;
+  }
+</style>
+</head>
+<body>
+<prague-timeline></prague-timeline>
+
+<script>
+(function() {
+  const CSS = String.raw`
+/* ============================================================
+   DESIGN TOKENS
+   ============================================================ */
+:host {
+  display: block;
+  --bg:           #f5f4f1;
+  --bg-alt:       #eceae5;
+  --surface:      #ffffff;
+  --surface-2:    #f0ede8;
+  --border:       #dbd8d2;
+  --border-strong:#b8b3aa;
+  --text:         #1a1816;
+  --text-2:       #4a4740;
+  --text-3:       #8a857d;
+  --accent:       #b5763a;
+  --accent-bg:    rgba(181,118,58,0.09);
+  --c-before:     #3b6ea8;
+  --c-before-bg:  rgba(59,110,168,0.08);
+  --c-before-mid: rgba(59,110,168,0.22);
+  --c-spring:     #3d8c58;
+  --c-spring-bg:  rgba(61,140,88,0.08);
+  --c-spring-mid: rgba(61,140,88,0.22);
+  --c-after:      #b83232;
+  --c-after-bg:   rgba(184,50,50,0.08);
+  --c-after-mid:  rgba(184,50,50,0.22);
+  --radius: 8px;
+  --radius-sm: 5px;
+  --shadow: 0 1px 3px rgba(0,0,0,0.07), 0 4px 12px rgba(0,0,0,0.05);
+}
+
+@media (prefers-color-scheme: dark) {
+  :host {
+    --bg:           #202020;
+    --bg-alt:       #191919;
+    --surface:      #2a2a2a;
+    --surface-2:    #323232;
+    --border:       #3a3a3a;
+    --border-strong:#505050;
+    --text:         #f0ece6;
+    --text-2:       #a8a39c;
+    --text-3:       #666260;
+    --accent:       #d4904a;
+    --accent-bg:    rgba(212,144,74,0.1);
+    --c-before:     #6090d0;
+    --c-before-bg:  rgba(96,144,208,0.1);
+    --c-before-mid: rgba(96,144,208,0.2);
+    --c-spring:     #55b070;
+    --c-spring-bg:  rgba(85,176,112,0.1);
+    --c-spring-mid: rgba(85,176,112,0.2);
+    --c-after:      #d85050;
+    --c-after-bg:   rgba(216,80,80,0.1);
+    --c-after-mid:  rgba(216,80,80,0.2);
+    --shadow: 0 1px 4px rgba(0,0,0,0.4), 0 4px 14px rgba(0,0,0,0.25);
+  }
+}
+
+/* ============================================================
+   BASE
+   ============================================================ */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+.shadow-root-wrap {
+  font-size: 16px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-weight: 400;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+}
+
+/* ============================================================
+   HEADER
+   ============================================================ */
+header {
+  background: var(--bg-alt);
+  border-bottom: 1px solid var(--border);
+  padding: clamp(52px, 9vw, 100px) 20px clamp(44px, 7vw, 80px);
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+header::after {
+  content: '1968';
+  position: absolute;
+  font-family: 'Libre Baskerville', serif;
+  font-size: clamp(110px, 26vw, 290px);
+  font-weight: 700;
+  color: var(--border);
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  letter-spacing: -8px;
+  pointer-events: none;
+  user-select: none;
+  opacity: 0.5;
+}
+.header-eyebrow {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 3.5px;
+  text-transform: uppercase;
+  color: var(--text-3);
+  margin-bottom: 18px;
+  position: relative;
+  z-index: 1;
+}
+h1 {
+  font-family: 'Libre Baskerville', serif;
+  font-size: clamp(52px, 12vw, 108px);
+  font-weight: 700;
+  color: var(--text);
+  line-height: 0.9;
+  letter-spacing: -2px;
+  position: relative;
+  z-index: 1;
+}
+h1 em { font-style: italic; color: var(--c-spring); }
+.header-sub {
+  margin-top: 22px;
+  font-size: 13px;
+  color: var(--text-3);
+  position: relative;
+  z-index: 1;
+}
+
+/* ============================================================
+   STICKY NAV
+   ============================================================ */
+.phase-nav {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: center;
+}
+.phase-btn {
+  flex: 1;
+  max-width: 240px;
+  padding: 13px 10px 11px;
+  border: none;
+  border-bottom: 3px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  font-family: 'Inter', sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text-3);
+  transition: color 0.2s, border-color 0.2s, background 0.2s;
+  line-height: 1.4;
+  -webkit-tap-highlight-color: transparent;
+}
+.phase-btn:hover { color: var(--text-2); background: var(--bg-alt); }
+.phase-btn .btn-sub { display: block; font-size: 9px; font-weight: 400; letter-spacing: 0.8px; opacity: 0.6; margin-top: 2px; }
+.phase-btn.before.active { color: var(--c-before); border-bottom-color: var(--c-before); background: var(--c-before-bg); }
+.phase-btn.spring.active { color: var(--c-spring); border-bottom-color: var(--c-spring); background: var(--c-spring-bg); }
+.phase-btn.after.active  { color: var(--c-after);  border-bottom-color: var(--c-after);  background: var(--c-after-bg);  }
+
+/* ============================================================
+   PAGE WRAP
+   ============================================================ */
+.page-wrap {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 0 16px;
+}
+
+/* ============================================================
+   STATS BAR
+   ============================================================ */
+.stats-bar {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin: 36px 0 44px;
+}
+@media (min-width: 580px) {
+  .stats-bar { grid-template-columns: repeat(6, 1fr); }
+}
+.stat-item {
+  background: var(--surface);
+  padding: 16px 10px 14px;
+  text-align: center;
+  transition: background 0.15s;
+}
+.stat-item:hover { background: var(--surface-2); }
+.stat-number {
+  display: block;
+  font-family: 'Libre Baskerville', serif;
+  font-size: clamp(16px, 3vw, 24px);
+  font-weight: 700;
+  color: var(--accent);
+  line-height: 1.15;
+}
+.stat-label {
+  display: block;
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--text-3);
+  margin-top: 4px;
+  line-height: 1.3;
+}
+
+/* ============================================================
+   PHASE SECTION
+   ============================================================ */
+.phase-section { display: none; animation: fadeIn 0.3s ease; }
+.phase-section.active { display: block; }
+
+.phase-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 18px;
+  border-radius: var(--radius);
+  margin-bottom: 24px;
+  border: 1px solid transparent;
+}
+.before .phase-header { background: var(--c-before-bg); border-color: var(--c-before-mid); }
+.spring .phase-header { background: var(--c-spring-bg); border-color: var(--c-spring-mid); }
+.after  .phase-header { background: var(--c-after-bg);  border-color: var(--c-after-mid);  }
+
+.phase-numeral {
+  font-family: 'Libre Baskerville', serif;
+  font-size: 42px;
+  font-weight: 700;
+  line-height: 1;
+  flex-shrink: 0;
+  opacity: 0.2;
+}
+.before .phase-numeral { color: var(--c-before); }
+.spring .phase-numeral { color: var(--c-spring); }
+.after  .phase-numeral { color: var(--c-after);  }
+
+.phase-title {
+  font-family: 'Libre Baskerville', serif;
+  font-size: clamp(17px, 3.5vw, 22px);
+  font-weight: 400;
+  color: var(--text);
+  line-height: 1.25;
+}
+.phase-period {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  color: var(--text-3);
+  margin-top: 3px;
+  text-transform: uppercase;
+}
+
+/* ============================================================
+   EVENTS
+   ============================================================ */
+.events-list {
+  position: relative;
+  padding-left: 26px;
+  margin-bottom: 36px;
+}
+.events-list::before {
+  content: '';
+  position: absolute;
+  left: 6px; top: 14px; bottom: 14px;
+  width: 1px;
+  background: var(--border);
+}
+
+.event-item {
+  position: relative;
+  margin-bottom: 3px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  padding: 13px 14px 11px;
+  transition: background 0.18s, border-color 0.18s, box-shadow 0.18s;
+  -webkit-tap-highlight-color: transparent;
+}
+.event-item::before {
+  content: '';
+  position: absolute;
+  left: -21px; top: 18px;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--border-strong);
+  border: 2px solid var(--bg);
+  transition: all 0.2s;
+}
+.before-phase .event-item::before { background: var(--c-before-mid); }
+.spring-phase .event-item::before { background: var(--c-spring-mid); }
+.after-phase  .event-item::before { background: var(--c-after-mid);  }
+
+.event-item:hover, .event-item.open {
+  background: var(--surface);
+  border-color: var(--border);
+  box-shadow: var(--shadow);
+}
+.before-phase .event-item:hover::before, .before-phase .event-item.open::before
+  { background: var(--c-before); box-shadow: 0 0 0 3px var(--c-before-bg); }
+.spring-phase .event-item:hover::before, .spring-phase .event-item.open::before
+  { background: var(--c-spring); box-shadow: 0 0 0 3px var(--c-spring-bg); }
+.after-phase  .event-item:hover::before, .after-phase  .event-item.open::before
+  { background: var(--c-after);  box-shadow: 0 0 0 3px var(--c-after-bg);  }
+
+.event-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.event-date {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--text-3);
+  white-space: nowrap;
+  padding-top: 3px;
+  flex-shrink: 0;
+  transition: color 0.2s;
+}
+.before-phase .event-item:hover .event-date, .before-phase .event-item.open .event-date { color: var(--c-before); }
+.spring-phase .event-item:hover .event-date, .spring-phase .event-item.open .event-date { color: var(--c-spring); }
+.after-phase  .event-item:hover .event-date, .after-phase  .event-item.open .event-date { color: var(--c-after);  }
+
+.event-title {
+  font-family: 'Libre Baskerville', serif;
+  font-size: clamp(14px, 2.5vw, 16px);
+  font-weight: 400;
+  color: var(--text);
+  line-height: 1.35;
+  flex: 1;
+  transition: color 0.2s;
+}
+.before-phase .event-item:hover .event-title { color: var(--c-before); }
+.spring-phase .event-item:hover .event-title { color: var(--c-spring); }
+.after-phase  .event-item:hover .event-title { color: var(--c-after);  }
+
+.toggle-btn {
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border-strong);
+  background: var(--surface-2);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  font-size: 15px; font-weight: 300; line-height: 1;
+  color: var(--text-3);
+  transition: all 0.25s;
+}
+.event-item.open .toggle-btn { transform: rotate(45deg); color: #fff; border-color: transparent; }
+.before-phase .event-item.open .toggle-btn { background: var(--c-before); }
+.spring-phase .event-item.open .toggle-btn { background: var(--c-spring); }
+.after-phase  .event-item.open .toggle-btn { background: var(--c-after);  }
+
+.event-teaser {
+  font-size: 12px;
+  color: var(--text-3);
+  line-height: 1.55;
+  margin-top: 5px;
+  padding-right: 32px;
+}
+
+.event-detail {
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: max-height 0.45s cubic-bezier(0.4,0,0.2,1), opacity 0.35s ease;
+}
+.event-item.open .event-detail { max-height: 900px; opacity: 1; }
+
+.event-body {
+  margin-top: 12px;
+  padding: 14px 16px;
+  background: var(--bg-alt);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  line-height: 1.8;
+  color: var(--text-2);
+  border-left: 3px solid var(--border-strong);
+}
+.before-phase .event-item.open .event-body { border-left-color: var(--c-before); }
+.spring-phase .event-item.open .event-body { border-left-color: var(--c-spring); }
+.after-phase  .event-item.open .event-body { border-left-color: var(--c-after);  }
+.event-body strong { color: var(--text); font-weight: 600; }
+
+.quote {
+  font-family: 'Libre Baskerville', serif;
+  font-style: italic;
+  font-size: 13px;
+  color: var(--accent);
+  padding: 10px 0 10px 14px;
+  border-left: 2px solid var(--accent);
+  margin: 12px 0;
+  line-height: 1.65;
+}
+
+
+/* ============================================================
+   SOURCES
+   ============================================================ */
+.sources-wrap {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 0 16px 56px;
+}
+.sources-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 13px 16px;
+  cursor: pointer;
+  font-family: 'Inter', sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-2);
+  transition: all 0.2s;
+  -webkit-tap-highlight-color: transparent;
+}
+.sources-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-bg); }
+.sources-btn.open  { border-color: var(--accent); color: var(--accent); background: var(--accent-bg);
+                     border-bottom-left-radius: 0; border-bottom-right-radius: 0; border-bottom-color: transparent; }
+.sources-icon {
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  border: 1.5px solid currentColor;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 15px; font-weight: 300;
+  transition: transform 0.3s;
+  flex-shrink: 0;
+}
+.sources-btn.open .sources-icon { transform: rotate(45deg); }
+
+.sources-body { max-height: 0; overflow: hidden; opacity: 0; transition: max-height 0.5s ease, opacity 0.4s ease; }
+.sources-body.open { max-height: 1400px; opacity: 1; }
+
+.sources-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--accent);
+  border-top: none;
+  border-bottom-left-radius: var(--radius);
+  border-bottom-right-radius: var(--radius);
+  overflow: hidden;
+}
+@media (min-width: 500px) { .sources-grid { grid-template-columns: 1fr 1fr; } }
+@media (min-width: 720px) { .sources-grid { grid-template-columns: 1fr 1fr 1fr; } }
+
+.source-card { background: var(--surface); padding: 15px 17px; transition: background 0.15s; }
+.source-card:hover { background: var(--surface-2); }
+.source-type { font-size: 9px; font-weight: 600; letter-spacing: 2px; text-transform: uppercase; color: var(--accent); opacity: 0.75; margin-bottom: 4px; }
+.source-name { font-family: 'Libre Baskerville', serif; font-size: 13px; color: var(--text); line-height: 1.4; margin-bottom: 4px; }
+.source-info { font-size: 11px; color: var(--text-3); line-height: 1.5; }
+.source-info a { color: var(--text-3); text-decoration: none; border-bottom: 1px solid var(--border-strong); transition: color 0.15s, border-color 0.15s; }
+.source-info a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* ============================================================
+   FOOTER
+   ============================================================ */
+footer {
+  background: var(--bg-alt);
+  border-top: 1px solid var(--border);
+  padding: 28px 20px;
+  text-align: center;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 1px;
+  color: var(--text-3);
+  line-height: 2;
+}
+footer .authors { color: var(--text-2); }
+
+/* ============================================================
+   ANIMATIONS & RESPONSIVE
+   ============================================================ */
+@keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+@media (max-width: 420px) {
+  .phase-btn { padding: 11px 6px 9px; font-size: 9px; letter-spacing: 0.8px; }
+  .event-teaser { padding-right: 0; }
+}
+`;
+
+  const HTML = String.raw`<header>
+  <div class="header-eyebrow">Czech &amp; Slovak History</div>
+  <h1>Prague<br><em>Spring</em></h1>
+  <p class="header-sub">Interactive Timeline — tap events to expand details</p>
+</header>
+
+<nav class="phase-nav">
+  <button class="phase-btn before active">
+    ① Prelude
+    <span class="btn-sub">1945 – 1967</span>
+  </button>
+  <button class="phase-btn spring">
+    ② Prague Spring
+    <span class="btn-sub">1968</span>
+  </button>
+  <button class="phase-btn after">
+    ③ Normalization
+    <span class="btn-sub">1968 – 1989</span>
+  </button>
+</nav>
+
+<div class="page-wrap">
+
+  <div class="stats-bar">
+    <div class="stat-item"><span class="stat-number">500,000</span><span class="stat-label">Invading Troops</span></div>
+    <div class="stat-item"><span class="stat-number">6,300</span><span class="stat-label">Tanks Deployed</span></div>
+    <div class="stat-item"><span class="stat-number">137</span><span class="stat-label">Lives Lost</span></div>
+    <div class="stat-item"><span class="stat-number">300,000</span><span class="stat-label">Emigrants</span></div>
+    <div class="stat-item"><span class="stat-number">21 yrs</span><span class="stat-label">Until Communism Fell</span></div>
+    <div class="stat-item"><span class="stat-number">8 mo.</span><span class="stat-label">The Spring Lasted</span></div>
+  </div>
+
+  <!-- PHASE 1 -->
+  <div class="phase-section before active" id="phase-before">
+    <div class="phase-header before">
+      <div class="phase-numeral">I.</div>
+      <div>
+        <div class="phase-title">The Road to Spring — Prelude</div>
+        <div class="phase-period">1945 — 1967</div>
+      </div>
+    </div>
+    <div class="events-list before-phase">
+
+      <div class="event-item">
+        <div class="event-row"><span class="event-date">Feb 1948</span><span class="event-title">The Communist Coup</span><span class="toggle-btn">+</span></div>
+        <div class="event-teaser">The Communist Party seizes power — beginning 41 years of one-party rule.</div>
+        <div class="event-detail"><div class="event-body">
+          The <strong>February coup</strong> was the result of political crisis and the KSČ's dominant position in the coalition government. President Edvard Beneš accepted the resignations of non-communist ministers and appointed a new government under Klement Gottwald. Czechoslovakia's democratic tradition was broken overnight.<br><br>
+          The Soviet model was imposed across all spheres — economics, culture, and justice. The show trials of the 1950s would cost many innocent people their lives.
+          <div class="quote">"The working class shall govern!" — Klement Gottwald, Wenceslas Square, February 1948</div>
+        </div></div>
+      </div>
+
+      <div class="event-item">
+        <div class="event-row"><span class="event-date">1950–1954</span><span class="event-title">Stalinist Show Trials</span><span class="toggle-btn">+</span></div>
+        <div class="event-teaser">Monster trials target the Party's own members. Rudolf Slánský and 13 others stand accused.</div>
+        <div class="event-detail"><div class="event-body">
+          The <strong>Trial of Rudolf Slánský</strong> (1952) marked the peak of Stalinist terror in Czechoslovakia. The General Secretary of the KSČ and 13 other senior officials were charged with treason and espionage. Eleven were executed.<br><br>
+          The trials also targeted "bourgeois nationalists" in Slovakia — <strong>Gustáv Husák</strong> was sentenced to life in prison (released 1960). Thousands more were imprisoned or sent to labour camps.
+        </div></div>
+      </div>
+
+      <div class="event-item">
+        <div class="event-row"><span class="event-date">Mar 1953</span><span class="event-title">Stalin's Death — A First Thaw</span><span class="toggle-btn">+</span></div>
+        <div class="event-teaser">Stalin's death creates cautious space for liberalization across the Eastern Bloc.</div>
+        <div class="event-detail"><div class="event-body">
+          Following Stalin's death, Nikita Khrushchev initiated <strong>de-Stalinization</strong>. At the 20th Congress of the CPSU (1956), he delivered his secret speech exposing Stalin's crimes. In Czechoslovakia, change came more slowly — the KSČ leadership resisted any open reckoning with the past.<br><br>
+          The uprisings of 1956 in Hungary and Poland — and the Soviet tanks that crushed them in Budapest — demonstrated the hard limits of reform. Yet new cultural currents began seeping through the censorship.
+        </div></div>
+      </div>
+
+      <div class="event-item">
+        <div class="event-row"><span class="event-date">1960–1963</span><span class="event-title">Economic Crisis &amp; First Reform Voices</span><span class="toggle-btn">+</span></div>
+        <div class="event-teaser">The Soviet economic model fails. Central planning delivers stagnation instead of prosperity.</div>
+        <div class="event-detail"><div class="event-body">
+          The centrally planned economy was hitting its limits. GDP growth was slowing and the technological gap with the West was widening. Economist <strong>Ota Šik</strong> developed a plan for market-oriented reforms — ideas that began making their way into party discussions.<br><br>
+          The 1960 constitution proclaimed that Czechoslovakia had entered socialism and renamed the country the ČSSR. Paradoxically, the same period saw the first systematic review of the 1950s trials.
+        </div></div>
+      </div>
+
+      <div class="event-item">
+        <div class="event-row"><span class="event-date">1963–1967</span><span class="event-title">Cultural Liberalization — The Golden Sixties</span><span class="toggle-btn">+</span></div>
+        <div class="event-teaser">The Czechoslovak New Wave conquers film festivals. Literature and theatre push limits of censorship.</div>
+        <div class="event-detail"><div class="event-body">
+          The 1960s brought extraordinary cultural flourishing. The <strong>Czechoslovak New Wave</strong> — Miloš Forman, Jiří Menzel, Věra Chytilová, Jan Němec — conquered international film festivals. The literature of Milan Kundera, Bohumil Hrabal, and Václav Havel pushed the boundaries of what was permissible.
+          <div class="quote">"We live in a time when a person must think carefully before speaking the truth." — Milan Kundera</div>
+          The 4th Congress of the Union of Czechoslovak Writers (1967) became an open confrontation with Party leadership. Reprisals paradoxically strengthened the reform movement.
+        </div></div>
+      </div>
+
+      <div class="event-item">
+        <div class="event-row"><span class="event-date">Oct 1967</span><span class="event-title">Student Demonstrations</span><span class="toggle-btn">+</span></div>
+        <div class="event-teaser">Students at Strahov protest power outages. Police crackdown triggers an avalanche.</div>
+        <div class="event-detail"><div class="event-body">
+          Students at the Strahov dormitories march by candlelight against recurring power failures. The <strong>brutal police response</strong> causes a scandal within the KSČ and strengthens the reform wing of the party.<br><br>
+          Brezhnev visits Prague and sharply criticizes Novotný's leadership. Reform-minded communists around Alexander Dubček sense the moment has come. At the December KSČ plenum, a vote is held on removing Novotný as First Secretary.
+        </div></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- PHASE 2 -->
+  <div class="phase-section spring" id="phase-spring">
+    <div class="phase-header spring">
+      <div class="phase-numeral">II.</div>
+      <div>
+        <div class="phase-title">Prague Spring</div>
+        <div class="phase-period">January — August 1968</div>
+      </div>
+    </div>
+    <div class="events-list spring-phase">
+
+      <div class="event-item">
+        <div class="event-row"><span class="event-date">5 Jan 1968</span><span class="event-title">Dubček Becomes First Secretary</span><span class="toggle-btn">+</span></div>
+        <div class="event-teaser">Alexander Dubček replaces Novotný. The Spring can begin.</div>
+        <div class="event-detail"><div class="event-body">
+          <strong>Alexander Dubček</strong>, a Slovak communist with reformist views, becomes First Secretary of the KSČ. The public receives his election with enthusiasm — Dubček was perceived as a sincere man who genuinely wanted to change the system.
+          <div class="quote">"Socialism with a human face" — the defining slogan of the Prague Spring</div>
+          Dubček believed socialism could be reformed from within — remaining loyal to the USSR while building a more humane system. This faith would ultimately prove fatal.
+        </div></div>
+      </div>
+
+      <div class="event-item">
+        <div class="event-row"><span class="event-date">Feb 1968</span><span class="event-title">Abolition of Press Censorship</span><span class="toggle-btn">+</span></div>
+        <div class="event-teaser">For the first time since 1948, newspapers tell the truth. An explosion of free expression.</div>
+        <div class="event-detail"><div class="event-body">
+          The lifting of censorship was one of the most dramatic moments of the Spring. <strong>Newspapers, radio, and television</strong> began openly reporting on political trials, the secret police (StB), corruption, and the everyday lies of communist life.<br><br>
+          Literární noviny, Mladý svět, Reporter — publications printed in runs that still couldn't keep up with demand. People argued over copies and read aloud in the streets.<br><br>
+          The Soviet leadership watched the free press with mounting alarm — uncensored mass media was seen as a threat to the entire bloc.
+        </div></div>
+      </div>
+
+      <div class="event-item">
+        <div class="event-row"><span class="event-date">5 Apr 1968</span><span class="event-title">The Action Programme</span><span class="toggle-btn">+</span></div>
+        <div class="event-teaser">The reform blueprint — political pluralism, federalization, rehabilitation of victims.</div>
+        <div class="event-detail"><div class="event-body">
+          The <strong>Action Programme</strong> was a comprehensive reform document promising: rehabilitation of victims of political trials, federalization of Czechoslovakia, curbing the power of the StB, freedom to travel abroad, and gradual political pluralization.<br><br>
+          The programme was revolutionary by the standards of the communist bloc — nowhere else had the party's leading role been challenged so openly. Moscow read it as a direct provocation.
+          <div class="quote">"The Programme does not mean we are surrendering the Party's leading role — it means we must deserve it." — Alexander Dubček</div>
+        </div></div>
+      </div>
+
+      <div class="event-item">
+        <div class="event-row"><span class="event-date">Spring 1968</span><span class="event-title">Euphoria — Civil Society Awakens</span><span class="toggle-btn">+</span></div>
+        <div class="event-teaser">Public debates, new associations, petitions. Society comes alive after twenty years of silence.</div>
+        <div class="event-detail"><div class="event-body">
+          The Spring of 1968 was unique: a spontaneous revival of civil society that had not existed for twenty years. New clubs, associations, and debate forums sprang up. People were no longer afraid to speak openly.<br><br>
+          The <strong>Club of Committed Non-Party Members (KAN)</strong> and <strong>K-231</strong> (an association of political prisoners) represented forces outside the KSČ. Their very existence was revolutionary.
+          <div class="quote">"Two Thousand Words" — Ludvík Vaculík's manifesto (27 June 1968) called for accelerating the reforms and was signed by 70,000 people.</div>
+        </div></div>
+      </div>
+
+      <div class="event-item">
+        <div class="event-row"><span class="event-date">Jun–Jul 1968</span><span class="event-title">Soviet Pressure — Warning Signs</span><span class="toggle-btn">+</span></div>
+        <div class="event-teaser">Moscow escalates its demands. Warsaw Pact military exercises on Czechoslovak soil drag on.</div>
+        <div class="event-detail"><div class="event-body">
+          The Soviet Union under <strong>Leonid Brezhnev</strong> watched developments with growing alarm:<br><br>
+          — June: Warsaw Pact exercises on Czechoslovak territory are extended — troops do not leave.<br>
+          — July: The Čierna nad Tisou meeting — Dubček promises reforms will not exceed a "socialist framework."<br>
+          — Bratislava Declaration (3 August): formal reassurances — but in Moscow, the decision has already been made.<br><br>
+          Dubček and the reform leadership believed the Soviets would not intervene militarily. It was a fatal miscalculation.
+        </div></div>
+      </div>
+
+      <div class="event-item">
+        <div class="event-row"><span class="event-date">20–21 Aug 1968</span><span class="event-title">The Invasion — End of the Spring</span><span class="toggle-btn">+</span></div>
+        <div class="event-teaser">500,000 troops from five countries cross the border. Tanks in Prague. The Spring is over.</div>
+        <div class="event-detail"><div class="event-body">
+          On the night of 20–21 August 1968, the forces of the <strong>USSR, Poland, Hungary, Bulgaria, and East Germany</strong> entered Czechoslovakia. Operation "Danube" — the largest military operation in Europe since World War II.<br><br>
+          <strong>500,000 troops, over 6,300 tanks, and 800 aircraft.</strong> Prague awoke to the rumble of engines. Tanks occupied Wenceslas Square, the Radio building, and central government institutions.<br><br>
+          People poured into the streets, surrounding tanks, arguing with soldiers. Passive resistance — but to no avail.
+          <div class="quote">"We came to save you." — written on a Soviet tank. Prague residents replied: "From whom?"</div>
+          Dubček and the leadership were arrested and flown to Moscow. President Svoboda refused to sign any document legitimizing the invasion without their presence.
+        </div></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- PHASE 3 -->
+  <div class="phase-section after" id="phase-after">
+    <div class="phase-header after">
+      <div class="phase-numeral">III.</div>
+      <div>
+        <div class="phase-title">Normalization &amp; Legacy</div>
+        <div class="phase-period">1968 — 1989</div>
+      </div>
+    </div>
+    <div class="events-list after-phase">
+
+      <div class="event-item">
+        <div class="event-row"><span class="event-date">Aug–Sep 1968</span><span class="event-title">The Moscow Protocol — Capitulation</span><span class="toggle-btn">+</span></div>
+        <div class="event-teaser">Dubček signs the terms. Reforms will be rolled back. Soviet troops will stay "temporarily."</div>
+        <div class="event-detail"><div class="event-body">
+          Dubček and the other leaders were subjected to intense psychological pressure in Moscow. The <strong>Moscow Protocol</strong> (26 August) legalized Soviet troops and bound the KSČ to pursue "normalization."<br><br>
+          Dubček returned to Prague a broken man. In a radio broadcast, he spoke through tears — he could not even read out the full text of the protocol. The nation understood.
+          <div class="quote">"Friends, trust me... it was difficult..." — Alexander Dubček, radio address, 27 August 1968</div>
+          Soviet troops remained. "Temporarily" meant 23 years — until 1991.
+        </div></div>
+      </div>
+
+      <div class="event-item">
+        <div class="event-row"><span class="event-date">16 Jan 1969</span><span class="event-title">Jan Palach — The Human Torch</span><span class="toggle-btn">+</span></div>
+        <div class="event-teaser">A philosophy student sets himself on fire on Wenceslas Square in protest against the nation's resignation.</div>
+        <div class="event-detail"><div class="event-body">
+          <strong>Jan Palach</strong>, a 20-year-old philosophy student, doused himself in petrol and set himself alight on the steps of the National Museum on 16 January 1969. He died on 19 January from his burns.<br><br>
+          Palach's act protested the passivity spreading through society after August. He demanded an end to censorship and the cessation of Soviet propaganda newspapers.
+          <div class="quote">"I have decided to become torch number 1." — Jan Palach, letter</div>
+          Hundreds of thousands attended his funeral — the last mass act of public resistance. In February, Jan Zajíc followed his example.
+        </div></div>
+      </div>
+
+      <div class="event-item">
+        <div class="event-row"><span class="event-date">Apr 1969</span><span class="event-title">Husák Replaces Dubček</span><span class="toggle-btn">+</span></div>
+        <div class="event-teaser">Gustáv Husák — himself a victim of Stalinist trials — accepts the role of normalization's enforcer.</div>
+        <div class="event-detail"><div class="event-body">
+          Following the Ice Hockey World Championship (Czechoslovakia defeated the USSR — street celebrations became a pretext for crackdown), <strong>Dubček was removed</strong> and replaced by <strong>Gustáv Husák</strong>.<br><br>
+          Husák was a paradoxical figure — condemned in the 1950s as a "bourgeois nationalist," a participant in the Prague Spring, and now the instrument of normalization.<br><br>
+          Dubček was dispatched as ambassador to Turkey, then expelled from the Party and spent years working as a forestry official in Bratislava.
+        </div></div>
+      </div>
+
+      <div class="event-item">
+        <div class="event-row"><span class="event-date">1970–1971</span><span class="event-title">The Purges — 500,000 Expelled</span><span class="toggle-btn">+</span></div>
+        <div class="event-teaser">Party screenings, mass dismissals, the death of free culture. The brain drain begins.</div>
+        <div class="event-detail"><div class="event-body">
+          The normalization screenings devastated hundreds of thousands of lives. <strong>500,000 KSČ members were expelled or struck off the rolls.</strong> Those affected lost their jobs — doctors became boiler stokers, engineers became security guards, journalists became manual labourers.<br><br>
+          Approximately <strong>300,000 Czechoslovaks emigrated</strong> — a catastrophic brain drain in science, culture, and economy. Milan Kundera, Miloš Forman, and many others departed.<br><br>
+          Free culture died in public — in its place came the grey zone of samizdat and underground art. The Plastic People trial (1976) inspired Charter 77.
+        </div></div>
+      </div>
+
+      <div class="event-item">
+        <div class="event-row"><span class="event-date">Jan 1977</span><span class="event-title">Charter 77</span><span class="toggle-btn">+</span></div>
+        <div class="event-teaser">Havel, Patočka, Hájek and hundreds of others sign a document demanding respect for human rights.</div>
+        <div class="event-detail"><div class="event-body">
+          <strong>Charter 77</strong> was born in response to the Plastic People trial and became a symbol of moral resistance. Václav Havel, Jan Patočka, Jiří Hájek, and hundreds of others signed a document reminding the government of its Helsinki Accord obligations.
+          <div class="quote">"Charter 77 is not an opposition party — it is a loose, informal and open community of people." — Charter 77 preamble</div>
+          Signatories faced harassment, interrogations, and travel bans. Philosopher <strong>Jan Patočka</strong> died after exhausting StB interrogations (1977). Havel spent years in prison.
+        </div></div>
+      </div>
+
+      <div class="event-item">
+        <div class="event-row"><span class="event-date">Nov 1989</span><span class="event-title">The Velvet Revolution — The End</span><span class="toggle-btn">+</span></div>
+        <div class="event-teaser">21 years after August, communism falls. Dubček and Havel on the balcony together.</div>
+        <div class="event-detail"><div class="event-body">
+          On 17 November 1989, police violently dispersed a student demonstration on Národní třída. That spark ignited the revolution. Within days, hundreds of thousands were gathering on Wenceslas Square.<br><br>
+          <strong>Alexander Dubček</strong> returned to public life after 21 years — his appearance on the Melantrich balcony alongside Václav Havel was a symbolic bridge between 1968 and 1989.
+          <div class="quote">"Children, you have finished what we could not." — Alexander Dubček, Wenceslas Square, 1989</div>
+          On 29 December 1989, <strong>Václav Havel was elected President</strong>. Communism fell without a single shot fired.
+        </div></div>
+      </div>
+
+      <div class="event-item">
+        <div class="event-row"><span class="event-date">Legacy</span><span class="event-title">What the Prague Spring Left Behind</span><span class="toggle-btn">+</span></div>
+        <div class="event-teaser">A moral inheritance. It showed that socialism cannot be reformed — and that truth cannot be buried forever.</div>
+        <div class="event-detail"><div class="event-body">
+          <strong>For Czechoslovakia:</strong> It demonstrated that reform socialism was an illusion — the system could not be humanized from within. The lesson for Charter 77 and 1989: truth and democracy are inseparable.<br><br>
+          <strong>For the world:</strong> "Socialism with a human face" inspired a generation of left-wing intellectuals in the West. Its defeat permanently disillusioned many from Soviet Marxism.<br><br>
+          <strong>The Brezhnev Doctrine</strong> — the USSR's claimed right to militarily intervene in "fraternal" countries — persisted until Gorbachev. Its abandonment helped trigger the collapse of communism across the entire bloc in 1989.<br><br>
+          <strong>Federalization</strong> (1969) — the one reform that survived — created the Czech and Slovak federation, a precursor to the peaceful dissolution of Czechoslovakia in 1993.
+        </div></div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<!-- SOURCES -->
+<div class="sources-wrap">
+  <button class="sources-btn">
+    <span>Sources &amp; Further Reading</span>
+    <span class="sources-icon">+</span>
+  </button>
+  <div class="sources-body" id="sources-body">
+    <div class="sources-grid">
+      <div class="source-card"><div class="source-type">Book</div><div class="source-name">The Prague Spring and its Aftermath</div><div class="source-info">Kieran Williams · Cambridge University Press, 1997</div></div>
+      <div class="source-card"><div class="source-type">Book</div><div class="source-name">Hope Dies Last: The Autobiography of Alexander Dubček</div><div class="source-info">Alexander Dubček · Kodansha America, 1993</div></div>
+      <div class="source-card"><div class="source-type">Book</div><div class="source-name">Reform Rule in Czechoslovakia: The Dubček Era</div><div class="source-info">Galia Golan · Cambridge University Press, 1973</div></div>
+      <div class="source-card"><div class="source-type">Book</div><div class="source-name">Václav Havel: A Political Tragedy in Six Acts</div><div class="source-info">John Keane · Bloomsbury, 1999</div></div>
+      <div class="source-card"><div class="source-type">Online</div><div class="source-name">Encyclopaedia Britannica — Prague Spring</div><div class="source-info"><a href="https://www.britannica.com/event/Prague-Spring" target="_blank">britannica.com/event/Prague-Spring</a></div></div>
+      <div class="source-card"><div class="source-type">Online</div><div class="source-name">Wikipedia — Prague Spring</div><div class="source-info"><a href="https://en.wikipedia.org/wiki/Prague_Spring" target="_blank">en.wikipedia.org/wiki/Prague_Spring</a></div></div>
+      <div class="source-card"><div class="source-type">Archive</div><div class="source-name">National Security Archive — Prague Spring Documents</div><div class="source-info"><a href="https://nsarchive.gwu.edu/project/prague-spring" target="_blank">nsarchive.gwu.edu</a> · Declassified Soviet &amp; U.S. records</div></div>
+      <div class="source-card"><div class="source-type">Archive</div><div class="source-name">ÚSTR — Institute for the Study of Totalitarian Regimes</div><div class="source-info"><a href="https://www.ustrcr.cz" target="_blank">ustrcr.cz</a> · Czech national archive &amp; StB records</div></div>
+      <div class="source-card"><div class="source-type">Online</div><div class="source-name">History.com — Prague Spring Overview</div><div class="source-info"><a href="https://www.history.com/topics/cold-war/prague-spring" target="_blank">history.com/topics/cold-war/prague-spring</a></div></div>
+    </div>
+  </div>
+</div>
+
+<footer>
+  Prague Spring 1968 — Interactive Timeline<br>
+  <span class="authors">Created by Šimon Mičulka &amp; Šimon Stejskal</span>
+</footer>`;
+
+  class PragueTimeline extends HTMLElement {
+    connectedCallback() {
+      const shadow = this.attachShadow({ mode: 'open' });
+
+      // Google Fonts link (must be in shadow root for it to load)
+      const fontLink = document.createElement('link');
+      fontLink.rel = 'stylesheet';
+      fontLink.href = 'https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=Inter:wght@300;400;500;600&display=swap';
+      shadow.appendChild(fontLink);
+
+      const style = document.createElement('style');
+      style.textContent = CSS;
+      shadow.appendChild(style);
+
+      const wrapper = document.createElement('div');
+      wrapper.className = 'shadow-root-wrap';
+      wrapper.innerHTML = HTML;
+      shadow.appendChild(wrapper);
+
+      // Wire up JS — scoped to shadow root
+      const root = shadow;
+
+      // Phase nav buttons
+      root.querySelectorAll('.phase-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const phase = btn.classList.contains('before') ? 'before'
+                      : btn.classList.contains('spring') ? 'spring' : 'after';
+          root.querySelectorAll('.phase-section').forEach(el => el.classList.remove('active'));
+          root.querySelectorAll('.phase-btn').forEach(el => el.classList.remove('active'));
+          root.querySelector('#phase-' + phase).classList.add('active');
+          btn.classList.add('active');
+        });
+      });
+
+      // Event items
+      root.querySelectorAll('.event-item').forEach(item => {
+        item.removeAttribute('onclick');
+        item.addEventListener('click', () => {
+          const isOpen = item.classList.contains('open');
+          item.closest('.events-list').querySelectorAll('.event-item').forEach(e => e.classList.remove('open'));
+          if (!isOpen) item.classList.add('open');
+        });
+      });
+
+      // Sources toggle
+      const sourcesBtn = root.querySelector('.sources-btn');
+      if (sourcesBtn) {
+        sourcesBtn.removeAttribute('onclick');
+        sourcesBtn.addEventListener('click', () => {
+          const body = root.querySelector('#sources-body');
+          const open = body.classList.toggle('open');
+          sourcesBtn.classList.toggle('open', open);
+        });
+      }
+    }
+  }
+
+  customElements.define('prague-timeline', PragueTimeline);
+})();
+</script>
+</body>
+</html>
